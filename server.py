@@ -176,10 +176,12 @@ def generate_quiz(request: Request, payload: QuizRequest):
     """
 
     try:
-        response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
+        client = openai.OpenAI()
+        response = client.chat.completions.create(
+            model="chatgpt-4o-latest",
             messages=[{"role": "user", "content": prompt}]
         )
+
         response_json = json.loads(response["choices"][0]["message"]["content"])
         return response_json
     except Exception as e:
