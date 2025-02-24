@@ -40,7 +40,7 @@ app.add_middleware(SlowAPIMiddleware)
 # ================================
 #   GLOBAL RATE LIMIT SETTINGS
 # ================================
-GLOBAL_REQUEST_LIMIT = 20  # 20 requests max per 60s globally
+GLOBAL_REQUEST_LIMIT = 7  # 20 requests max per 60s globally
 TIME_WINDOW = 60  # 60 seconds
 global_requests: Deque[float] = deque()
 
