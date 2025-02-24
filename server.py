@@ -155,6 +155,7 @@ def generate_quiz(request: Request, payload: QuizRequest):
             }}
         ]
     }}
+    Only giving short answer questions and answers are only short answers.
     """
 
     try:
@@ -196,13 +197,14 @@ def generate_notes(request: Request, payload: NotesRequest):
     {{
         "notes": "Generated study notes here."
     }}
+    Make them detailed and informative and engaging and easy to understand and read and using advanced methods and techniques used by professionals to make them really engaging and the user learns lots from them.
     """
 
     try:
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4o-mini-2024-07-18",
             messages=[{"role": "user", "content": prompt}],
-            response_format="json"
+            response_format={"type": "json_object"}  # ✅ Correct format
         )
         return response.choices[0].message.content
     except Exception as e:
