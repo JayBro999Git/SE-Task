@@ -25,7 +25,7 @@ if not openai_api_key:
 
 client = openai.OpenAI(api_key=openai_api_key)
 
-DISCORD_WEBHOOK_URL = "YOUR_DISCORD_WEBHOOK_URL"  # Replace with your webhook URL
+DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK")
 
 # ================================
 #   FASTAPI + SLOWAPI INIT
