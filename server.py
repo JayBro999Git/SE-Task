@@ -151,7 +151,8 @@ def generate_quiz(request: Request, payload: QuizRequest):
         response = client.chat.completions.create(
             model="gpt-4o-mini-2024-07-18",
             messages=[{"role": "user", "content": prompt}],
-            response_format="json"
+            response_format={"type": "json_object"}
+
         )
         return response.choices[0].message.content
     except Exception as e:
