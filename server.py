@@ -16,44 +16,34 @@ from slowapi.middleware import SlowAPIMiddleware
 from slowapi.errors import RateLimitExceeded
 from fastapi.responses import JSONResponse
 
-# ================================
-#   ENV / API KEY SETUP
-# ================================
+# my api key secured in the backend so no one can access it and abuse it
 openai_api_key = os.getenv("OPENAI_API_KEY")
 if not openai_api_key:
-    raise ValueError("Missing OpenAI API Key!")
+    raise ValueError("missing api key bruh")
 
 client = openai.OpenAI(api_key=openai_api_key)
 
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK")
 
-# ================================
-#   FASTAPI + SLOWAPI INIT
-# ================================
-app = FastAPI(title="Educational Server with Queue & Rate Limits")
+# fast api
+app = FastAPI(title="Educational App Server")
 
-# IP-based rate limiter (e.g., 10 requests per minute per IP)
+# IP-based rate limiter
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 app.add_middleware(SlowAPIMiddleware)
 
-# ================================
-#   GLOBAL RATE LIMIT SETTINGS
-# ================================
+# global rate limit configuration
 GLOBAL_REQUEST_LIMIT = 7  # 20 requests max per 60s globally
 TIME_WINDOW = 60  # 60 seconds
 global_requests: Deque[float] = deque()
 
-# ================================
-#   QUEUE TO HANDLE OVERFLOW
-# ================================
+# handling server overload
 request_queue: Deque[str] = deque()
 tasks: Dict[str, Dict] = {}
 
 
-# ================================
-#   MODELS FOR REQUEST BODY
-# ================================
+# structure for request body
 class QuizRequest(BaseModel):
     topic: str
     grade: int
@@ -65,11 +55,9 @@ class NotesRequest(BaseModel):
     grade: int
 
 
-# ================================
-#   ERROR HANDLING - DISCORD WEBHOOK
-# ================================
+# error logging to an external source for investigation
 def send_error_to_discord(error_message: str, request_data: dict = None):
-    """Send error details to a Discord webhook for debugging."""
+    """send error details to a discord webhook"""
     timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
 
     embed = {
@@ -95,9 +83,7 @@ def send_error_to_discord(error_message: str, request_data: dict = None):
         print(f"Failed to send error to Discord: {e}")
 
 
-# ================================
-#   GLOBAL RATE LIMIT MIDDLEWARE
-# ================================
+# global rate limit middleware
 @app.middleware("http")
 async def global_rate_limit_middleware(request: Request, call_next):
     """Handles global rate limit & queues users when limit is reached."""
@@ -120,13 +106,11 @@ async def global_rate_limit_middleware(request: Request, call_next):
     )
 
 
-# ================================
-#   QUIZ GENERATION
-# ================================
+# quiz generation
 @limiter.limit("5/minute")
 @app.post("/generate_quiz")
 def generate_quiz(request: Request, payload: QuizRequest):
-    """Generates a quiz JSON via OpenAI."""
+    """this will generate a quiz and return in json format"""
     topic, grade, num_questions = payload.topic, payload.grade, payload.num_questions
 
     if not (1 <= num_questions <= 20):
@@ -155,24 +139,24 @@ def generate_quiz(request: Request, payload: QuizRequest):
             }}
         ]
     }}
-    Only giving short answer questions and answers are only short answers.
+    Only giving short answer questions and answers are only short answers. If you are unsure of what the user is saying, have your best guess of what the user is talking about.  Never return anything about not knowing that they mean. Always return something. Make the questions creative and engaging so the user feels good about what they are doing and not find it boring or not engaging.
     """
 
     try:
         response = client.chat.completions.create(
             model="gpt-4o-mini-2024-07-18",
             messages=[{"role": "user", "content": prompt}],
-            response_format={"type": "json_object"}  # ✅ Correct format
+            response_format={"type": "json_object"}  
         )
         
-        # Ensure JSON parsing
+        # ensure jason parsing
         result = json.loads(response.choices[0].message.content)
 
-        # Validate that "questions" key exists and is a list
+        # make sure 'questions' is a list
         if "questions" not in result or not isinstance(result["questions"], list):
             raise ValueError("Invalid response format: Missing or incorrect 'questions' key.")
 
-        return result  # ✅ Return a valid JSON object with a "questions" list
+        return result
 
     except Exception as e:
         error_message = f"Quiz generation failed: {str(e)}"
@@ -181,17 +165,15 @@ def generate_quiz(request: Request, payload: QuizRequest):
 
 
 
-# ================================
-#   NOTES GENERATION
-# ================================
+# quiz generation
 @limiter.limit("5/minute")
 @app.post("/generate_notes")
 def generate_notes(request: Request, payload: NotesRequest):
-    """Generates quick study notes JSON via OpenAI."""
+    """generate quick study notes and ensure json return"""
     topic, grade = payload.topic, payload.grade
 
     prompt = f"""
-    Create concise, easy-to-understand study notes on {topic} for a grade {grade} student.
+    Create concise, easy-to-understand, and engaging study notes on {topic} for a grade {grade} student.
     Make it clear, engaging, and suitable for their level.
     Return JSON only:
     {{
@@ -204,7 +186,7 @@ def generate_notes(request: Request, payload: NotesRequest):
         response = client.chat.completions.create(
             model="gpt-4o-mini-2024-07-18",
             messages=[{"role": "user", "content": prompt}],
-            response_format={"type": "json_object"}  # ✅ Correct format
+            response_format={"type": "json_object"} 
         )
         return response.choices[0].message.content
     except Exception as e:
@@ -212,10 +194,7 @@ def generate_notes(request: Request, payload: NotesRequest):
         send_error_to_discord(error_message, payload.dict())
         raise HTTPException(status_code=500, detail="Unexpected error occurred. We've notified developers.")
 
-
-# ================================
-#   RUN WITH UVICORN LOCALLY
-# ================================
+# run
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
