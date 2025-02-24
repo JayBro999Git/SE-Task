@@ -126,7 +126,7 @@ async def global_rate_limit_middleware(request: Request, call_next):
 @limiter.limit("5/minute")
 @app.post("/generate_quiz")
 def generate_quiz(request: Request, payload: QuizRequest):
-    """Generates quiz JSON via OpenAI."""
+    """Generates a quiz JSON via OpenAI."""
     topic, grade, num_questions = payload.topic, payload.grade, payload.num_questions
 
     if not (1 <= num_questions <= 20):
@@ -134,31 +134,50 @@ def generate_quiz(request: Request, payload: QuizRequest):
 
     prompt = f"""
     Generate a quiz on {topic} for a grade {grade} student. Create {num_questions} questions.
-    Return JSON only:
+    Return a JSON object with a key called 'questions', which contains a list of questions.
+    Each question should have:
+    - 'question' (the question text)
+    - 'correct_answers' (a list of 3 possible correct answers)
+    - 'wrong_response' (an explanation if the answer is wrong)
+    
+    Example response format:
     {{
         "questions": [
             {{
-                "question": "Quiz question",
-                "correct_answers": ["variation1", "variation2", "variation3"],
-                "wrong_response": "Explanation why a wrong answer is incorrect."
+                "question": "What is the smallest unit of an element?",
+                "correct_answers": ["atom", "an atom", "atoms"],
+                "wrong_response": "Incorrect. The smallest unit of an element is an atom."
             }},
-            ...
+            {{
+                "question": "How many electrons can the first shell of an atom hold?",
+                "correct_answers": ["2", "two", "2 electrons"],
+                "wrong_response": "Incorrect. The first shell of an atom can hold only 2 electrons."
+            }}
         ]
     }}
     """
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o-mini-2024-07-18",
+            model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": prompt}],
-            response_format={"type": "json_object"}
-
+            response_format={"type": "json_object"}  # ✅ Correct format
         )
-        return response.choices[0].message.content
+        
+        # Ensure JSON parsing
+        result = json.loads(response.choices[0].message.content)
+
+        # Validate that "questions" key exists and is a list
+        if "questions" not in result or not isinstance(result["questions"], list):
+            raise ValueError("Invalid response format: Missing or incorrect 'questions' key.")
+
+        return result  # ✅ Return a valid JSON object with a "questions" list
+
     except Exception as e:
         error_message = f"Quiz generation failed: {str(e)}"
         send_error_to_discord(error_message, payload.dict())
         raise HTTPException(status_code=500, detail="Unexpected error occurred. We've notified developers.")
+
 
 
 # ================================
