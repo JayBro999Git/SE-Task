@@ -104,11 +104,12 @@ class NotesRequest(BaseModel):
 
 # --- Middleware for Global Rate Limit and IP Blocking ---
 @app.middleware("http")
+@app.middleware("http")
 async def custom_rate_limit_middleware(request: Request, call_next):
     current_time = time.time()
     client_ip = get_remote_address(request)
 
-    # Check if IP is blocked
+    # 🚨 Check if IP is blocked
     if client_ip in blocked_ips:
         if current_time < blocked_ips[client_ip]:
             return JSONResponse(
@@ -120,32 +121,53 @@ async def custom_rate_limit_middleware(request: Request, call_next):
             del blocked_ips[client_ip]
             ip_request_history[client_ip].clear()
 
-    # Track IP requests within the last 3 seconds
+    # 📌 Track IP requests in the last 3 seconds
     history = ip_request_history[client_ip]
     while history and current_time - history[0] > 3:
         history.popleft()
     history.append(current_time)
 
-    # If more than 2 requests in less than 3 seconds, block IP for 12 hours
+    # 🚫 **If more than 2 requests in 3 sec → block IP & STOP processing**
     if len(history) > 2:
-        block_until = current_time + 12 * 3600  # 12 hours in seconds
+        block_until = current_time + 12 * 3600  # 12 hours
         blocked_ips[client_ip] = block_until
-        # Log detailed DDoS event
-        send_ddos_alert_to_discord(client_ip, len(history))
+        
+        # 🔴 **Log DDoS attack to Discord**
+        attack_details = {
+            "username": "FastAPI Security",
+            "embeds": [
+                {
+                    "title": "🚨 DDoS Attack Detected!",
+                    "description": f"IP `{client_ip}` made **{len(history)}** requests in 3 seconds and has been blocked.",
+                    "color": 15158332,  # Red color
+                    "fields": [
+                        {"name": "Timestamp (UTC)", "value": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")},
+                        {"name": "Block Duration", "value": "12 hours"},
+                        {"name": "Requests Per Second", "value": f"{len(history) / 3:.2f} req/s"},
+                    ]
+                }
+            ]
+        }
+        try:
+            requests.post(DISCORD_WEBHOOK_URL, json=attack_details, timeout=5)
+        except Exception as e:
+            print(f"Failed to send DDoS alert to Discord: {e}")
+
+        # ❌ **Immediately return error response → NO queueing, NO processing**
         return JSONResponse(
             {"detail": "Too many requests in a short period. Your IP has been blocked for 12 hours."},
             status_code=status.HTTP_429_TOO_MANY_REQUESTS
         )
 
-    # Global rate limiting for overall server load
+    # 🌍 **Global rate limiting (for all users)**
     while global_requests and current_time - global_requests[0] > TIME_WINDOW:
         global_requests.popleft()
-
+    
     if len(global_requests) < GLOBAL_REQUEST_LIMIT:
         global_requests.append(current_time)
         return await call_next(request)
 
-    # If global limit is exceeded, queue the request
+    # 🕒 **If global limit is exceeded → queue request**
     task_id = str(uuid.uuid4())
     request_queue.append(task_id)
     tasks[task_id] = {"status": "queued", "created_at": current_time, "request_path": str(request.url.path)}
@@ -154,6 +176,7 @@ async def custom_rate_limit_middleware(request: Request, call_next):
         {"status": "queued", "position": len(request_queue), "task_id": task_id, "message": "Added to queue."},
         status_code=status.HTTP_429_TOO_MANY_REQUESTS
     )
+
 
 # --- Endpoints ---
 
