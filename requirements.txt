@@ -1,6 +1,0 @@
-# These are the packages we need for this project
-fastapi  # for making the API
-uvicorn  # for running the server
-openai  # for AI stuff
-pydantic  # for data validation
-requests  # for HTTP requests
